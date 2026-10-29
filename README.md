@@ -12,12 +12,11 @@ write direct x86_64 Assembly instructions after the header of a executable using
 
 # Executable design (still work in progress)
 The executable header is defined like this:
-hex code 0xAA
-ASCII string EXE
-executable type (can be STRT for a program that gets startet on boot if inside C:\Start, DRIV for drivers or PLSE if it should just be a standard program)
-4 bytes for the 
-executable version
-8 bytes reserved for a smart comment or description (gets skipped by BIYOS)
+hex code 0xAA, 
+ASCII string EXE, 
+executable type (can be STRT for a program that gets startet on boot if inside C:\Start, DRIV for drivers or PLSE if it should just be a standard program), 
+4 bytes for the executable version,
+8 bytes reserved for a smart comment or description (gets skipped by BIYOS) 
 and that's the standard-header but there can also be the ASCII string IMPORT after the first 20 bytes wich then is the beginning of the import table. That is the current executable design.
 
 # RUN AT YOUR OWN RISK
