@@ -7,12 +7,18 @@
 #   make        -> BOOTX64.EFI bauen
 #   make esp    -> Ordner esp/ mit EFI-Struktur anlegen (FAT-Ersatz fuer QEMU)
 #   make run    -> in QEMU mit OVMF starten (OVMF-Pfad ggf. anpassen)
+#   make run NVME_IMG=../nvme.img  -> zusaetzlich ein NVMe-Laufwerk einbinden (tools/make-test-image.sh)
 
 CC      := x86_64-w64-mingw32-gcc
 CFLAGS  := -std=c11 -Wall -Wextra -O2 -ffreestanding -fno-stack-protector -fno-stack-check \
            -mno-red-zone -fno-asynchronous-unwind-tables
 LDFLAGS := -nostdlib -Wl,-dll -shared -Wl,--subsystem,10 -e efi_main
 OVMF    ?= /usr/share/ovmf/OVMF.fd
+NVME_IMG ?=
+
+ifneq ($(NVME_IMG),)
+NVME_ARGS := -drive file=$(NVME_IMG),if=none,id=nv0,format=raw -device nvme,drive=nv0,serial=biyos0
+endif
 
 .PHONY: all esp run clean
 
@@ -30,7 +36,7 @@ esp: BOOTX64.EFI
 	cp boot.cfg esp/BIYOS/boot.cfg
 
 run: esp
-	qemu-system-x86_64 -m 256M -bios $(OVMF) -drive file=fat:rw:esp,format=raw -net none
+	qemu-system-x86_64 -m 256M -bios $(OVMF) -drive file=fat:rw:esp,format=raw -net none $(NVME_ARGS)
 
 clean:
 	rm -rf main.o BOOTX64.EFI esp
