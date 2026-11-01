@@ -129,53 +129,120 @@ static const uint8_t font_digit[10][7] = {
     {0x0E,0x11,0x11,0x0F,0x01,0x02,0x0C}, /* 9 */
 };
 
-static const uint8_t g_space[7]  = {0, 0, 0, 0, 0, 0, 0};
-static const uint8_t g_colon[7]  = {0, 0x04, 0, 0, 0, 0x04, 0};
-static const uint8_t g_dash[7]   = {0, 0, 0, 0x1F, 0, 0, 0};
-static const uint8_t g_dot[7]    = {0, 0, 0, 0, 0, 0x0C, 0x0C};
-static const uint8_t g_slash[7]  = {0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10};
-static const uint8_t g_comma[7]  = {0, 0, 0, 0, 0x0C, 0x04, 0x08};
-static const uint8_t g_equal[7]  = {0, 0, 0x1F, 0, 0x1F, 0, 0};
-static const uint8_t g_under[7]  = {0, 0, 0, 0, 0, 0, 0x1F};
-static const uint8_t g_plus[7]   = {0, 0x04, 0x04, 0x1F, 0x04, 0x04, 0};
-static const uint8_t g_hash[7]   = {0x0A, 0x0A, 0x1F, 0x0A, 0x1F, 0x0A, 0x0A};
-static const uint8_t g_lpar[7]   = {0x02, 0x04, 0x08, 0x08, 0x08, 0x04, 0x02};
-static const uint8_t g_rpar[7]   = {0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08};
-static const uint8_t g_unk[7]    = {0x1F, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1F};
+typedef struct {
+    char c;
+    uint8_t rows[7];
+} SpecialGlyph;
+
+static const SpecialGlyph specials[] = {
+    {' ', {0, 0, 0, 0, 0, 0, 0}},
+    {':', {0, 0x04, 0, 0, 0, 0x04, 0}},
+    {';', {0, 0x04, 0, 0, 0x04, 0x04, 0x08}},
+    {'-', {0, 0, 0, 0x1F, 0, 0, 0}},
+    {'.', {0, 0, 0, 0, 0, 0x0C, 0x0C}},
+    {',', {0, 0, 0, 0, 0x0C, 0x04, 0x08}},
+    {'/', {0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10}},
+    {'\\', {0x10, 0x08, 0x08, 0x04, 0x02, 0x02, 0x01}},
+    {'=', {0, 0, 0x1F, 0, 0x1F, 0, 0}},
+    {'+', {0, 0x04, 0x04, 0x1F, 0x04, 0x04, 0}},
+    {'_', {0, 0, 0, 0, 0, 0, 0x1F}},
+    {'*', {0, 0x04, 0x15, 0x0E, 0x15, 0x04, 0}},
+    {'#', {0x0A, 0x0A, 0x1F, 0x0A, 0x1F, 0x0A, 0x0A}},
+    {'(', {0x02, 0x04, 0x08, 0x08, 0x08, 0x04, 0x02}},
+    {')', {0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08}},
+    {'[', {0x0E, 0x08, 0x08, 0x08, 0x08, 0x08, 0x0E}},
+    {']', {0x0E, 0x02, 0x02, 0x02, 0x02, 0x02, 0x0E}},
+    {'{', {0x02, 0x04, 0x04, 0x08, 0x04, 0x04, 0x02}},
+    {'}', {0x08, 0x04, 0x04, 0x02, 0x04, 0x04, 0x08}},
+    {'<', {0x02, 0x04, 0x08, 0x10, 0x08, 0x04, 0x02}},
+    {'>', {0x08, 0x04, 0x02, 0x01, 0x02, 0x04, 0x08}},
+    {'|', {0x04, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04}},
+    {'!', {0x04, 0x04, 0x04, 0x04, 0x04, 0, 0x04}},
+    {'?', {0x0E, 0x11, 0x01, 0x02, 0x04, 0, 0x04}},
+    {'"', {0x0A, 0x0A, 0x0A, 0, 0, 0, 0}},
+    {'\'', {0x04, 0x04, 0x08, 0, 0, 0, 0}},
+    {'`', {0x08, 0x04, 0x02, 0, 0, 0, 0}},
+    {'^', {0x04, 0x0A, 0x11, 0, 0, 0, 0}},
+    {'~', {0, 0, 0x08, 0x15, 0x02, 0, 0}},
+    {'@', {0x0E, 0x11, 0x17, 0x15, 0x17, 0x10, 0x0E}},
+    {'%', {0x18, 0x19, 0x02, 0x04, 0x08, 0x13, 0x03}},
+    {'&', {0x0C, 0x12, 0x14, 0x08, 0x15, 0x12, 0x0D}},
+    {'$', {0x04, 0x0F, 0x14, 0x0E, 0x05, 0x1E, 0x04}},
+};
+
+static const uint8_t g_unk[7] = {0x1F, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1F};
 
 static const uint8_t *glyph(char c) {
     if (c >= 'a' && c <= 'z') c = (char)(c - 32);
     if (c >= 'A' && c <= 'Z') return font_alpha[c - 'A'];
     if (c >= '0' && c <= '9') return font_digit[c - '0'];
-    switch (c) {
-    case ' ': return g_space;
-    case ':': return g_colon;
-    case '-': return g_dash;
-    case '.': return g_dot;
-    case '/': return g_slash;
-    case ',': return g_comma;
-    case '=': return g_equal;
-    case '_': return g_under;
-    case '+': return g_plus;
-    case '#': return g_hash;
-    case '(': return g_lpar;
-    case ')': return g_rpar;
-    default:  return g_unk;
-    }
+    for (size_t i = 0; i < sizeof(specials) / sizeof(specials[0]); i++)
+        if (specials[i].c == c) return specials[i].rows;
+    return g_unk;
 }
 
 /* ------------------------------------------------------------------ */
 /* Textkonsole (Framebuffer + serielle Spiegelung)                     */
 /* ------------------------------------------------------------------ */
+#define MAX_COLS 240
+#define MAX_ROWS 100
+
 static uint32_t cx, cy, cols, rows;
+static char sh_ch[MAX_ROWS][MAX_COLS];        /* Schattenpuffer: Zeichen ... */
+static uint32_t sh_col[MAX_ROWS][MAX_COLS];   /* ... und ihre Farben, damit Scrollen im RAM geschieht */
 
 #define CELL_W (6 * (uint32_t)scale)
 #define CELL_H (8 * (uint32_t)scale)
 
-static void con_clear(void) {
-    fill_rect(0, 0, fb_w, fb_h, rgb(8, 12, 24));
+static uint32_t bg_color(void) {
+    return rgb(8, 12, 24);
+}
+
+static void draw_glyph(uint32_t col, uint32_t row, char c, uint32_t color) {
+    uint32_t x = col * CELL_W, y = row * CELL_H;
+    fill_rect(x, y, CELL_W, CELL_H, bg_color());
+    if (c == 0 || c == ' ') return;
+    const uint8_t *g = glyph(c);
+    for (int r = 0; r < 7; r++)
+        for (int b = 0; b < 5; b++)
+            if (g[r] & (1 << (4 - b)))
+                fill_rect(x + (uint32_t)b * (uint32_t)scale, y + (uint32_t)r * (uint32_t)scale,
+                          (uint32_t)scale, (uint32_t)scale, color);
+}
+
+static void con_redraw(void) {
+    fill_rect(0, 0, fb_w, fb_h, bg_color());
+    fill_rect(0, 0, fb_w, 6, rgb(60, 140, 255));   /* Balken oben */
+    for (uint32_t r = 1; r + 1 < rows; r++)
+        for (uint32_t c = 1; c + 1 < cols; c++)
+            if (sh_ch[r][c] && sh_ch[r][c] != ' ') draw_glyph(c, r, sh_ch[r][c], sh_col[r][c]);
+}
+
+void con_reset(void) {
+    uint64_t f = irq_save();
+    memset(sh_ch, 0, sizeof(sh_ch));
     cx = 1;
     cy = 1;
+    if (fb) con_redraw();
+    irq_restore(f);
+}
+
+static void con_scroll(void) {
+    for (uint32_t r = 1; r + 2 < rows; r++) {
+        memcpy(sh_ch[r], sh_ch[r + 1], MAX_COLS);
+        memcpy(sh_col[r], sh_col[r + 1], sizeof(sh_col[r]));
+    }
+    memset(sh_ch[rows - 2], 0, MAX_COLS);
+    con_redraw();
+}
+
+static void con_newline(void) {
+    cx = 1;
+    cy++;
+    if (cy + 1 > rows - 1) {
+        cy = rows - 2;
+        con_scroll();
+    }
 }
 
 void con_color(uint8_t r, uint8_t g, uint8_t b) {
@@ -192,24 +259,14 @@ static void con_putc_raw(char c) {
     if (!fb) return;
 
     if (c == '\n') {
-        cx = 1;
-        cy++;
-    } else {
-        if (cx >= cols - 1) {
-            cx = 1;
-            cy++;
-        }
-        if (cy >= rows - 1) con_clear();
-        const uint8_t *g = glyph(c);
-        uint32_t x = cx * CELL_W, y = cy * CELL_H;
-        for (int r = 0; r < 7; r++)
-            for (int b = 0; b < 5; b++)
-                if (g[r] & (1 << (4 - b)))
-                    fill_rect(x + (uint32_t)b * (uint32_t)scale, y + (uint32_t)r * (uint32_t)scale,
-                              (uint32_t)scale, (uint32_t)scale, fg);
-        cx++;
+        con_newline();
+        return;
     }
-    if (cy >= rows - 1) con_clear();
+    if (cx + 1 > cols - 2) con_newline();
+    sh_ch[cy][cx] = c;
+    sh_col[cy][cx] = fg;
+    draw_glyph(cx, cy, c, fg);
+    cx++;
 }
 
 void con_putc(char c) {
@@ -221,6 +278,19 @@ void con_putc(char c) {
 void con_puts(const char *s) {
     uint64_t f = irq_save();   /* Zeichenkette am Stueck ausgeben, auch bei mehreren Tasks */
     while (*s) con_putc_raw(*s++);
+    irq_restore(f);
+}
+
+void con_backspace(void) {
+    uint64_t f = irq_save();
+    serial_putc('\b');
+    serial_putc(' ');
+    serial_putc('\b');
+    if (fb && cx > 1) {
+        cx--;
+        sh_ch[cy][cx] = 0;
+        draw_glyph(cx, cy, 0, fg);
+    }
     irq_restore(f);
 }
 
@@ -284,6 +354,13 @@ KernelApi kapi = {
     .yield = sched_yield,
     .sleep_ms = sched_sleep_ms,
     .uptime_ms = timer_uptime_ms,
+    .getkey = kbd_getc,
+    .file_read_all = vfs_read_all,
+    .file_read = vfs_read,
+    .file_write = vfs_write,
+    .file_mkdir = vfs_mkdir,
+    .file_remove = vfs_remove,
+    .file_rename = vfs_rename,
 };
 
 /* ------------------------------------------------------------------ */
@@ -425,12 +502,42 @@ static void sched_selftest(void) {
     con_puts(" SEITEN\n");
 }
 
+#ifdef BIYOS_DISK_WRITE_TEST
+/* Schreibtest des Blocklayers: 40 Sektoren (mehr als ein Zwischenpuffer, also mehrere Befehle und
+ * PRP-Liste) auf nvme0p2 schreiben, zuruecklesen, vergleichen und den alten Inhalt wiederherstellen.
+ * Der Treiber schreibt sonst nie von selbst. NICHT auf echten Datentraegern aktivieren. */
+static void disk_write_test(void) {
+    BlockDev *t = blk_find("nvme0p2");
+    int ok = 0;
+    if (t) {
+        size_t n = (size_t)40 * t->sector_size;
+        uint8_t *orig = kapi.malloc(n), *pat = kapi.malloc(n), *back = kapi.malloc(n);
+        if (orig && pat && back && t->read(t, 8, 40, orig) == 0) {
+            for (size_t i = 0; i < n; i++) pat[i] = (uint8_t)(i * 31 + 7);
+            ok = t->write(t, 8, 40, pat) == 0 && t->read(t, 8, 40, back) == 0;
+            for (size_t i = 0; ok && i < n; i++)
+                if (back[i] != pat[i]) ok = 0;
+#if BIYOS_DISK_WRITE_TEST != 2   /* 2 = Muster stehen lassen, damit man es auf dem Host pruefen kann */
+            ok = (t->write(t, 8, 40, orig) == 0) && ok;   /* Zustand wiederherstellen */
+#endif
+        }
+        kapi.free(orig);
+        kapi.free(pat);
+        kapi.free(back);
+    }
+    report("DISK WRITE TEST", ok);
+}
+#endif
+
 /* ------------------------------------------------------------------ */
 /* Kernel                                                              */
 /* ------------------------------------------------------------------ */
+const BootInfo *g_bi;
+
 void kmain(BootInfo *bi);
 void kmain(BootInfo *bi) {
     serial_init();
+    g_bi = bi;
 
     if (!bi || bi->magic != BIYOS_BOOTINFO_MAGIC) {
         for (const char *s = "BIYOS: BootInfo ungueltig\r\n"; *s; s++) serial_putc(*s);
@@ -446,8 +553,9 @@ void kmain(BootInfo *bi) {
         scale = (fb_w >= 1920) ? 3 : 2;
         cols = fb_w / CELL_W;
         rows = fb_h / CELL_H;
-        con_clear();
-        fill_rect(0, 0, fb_w, 6, rgb(60, 140, 255));   /* Balken oben */
+        if (cols > MAX_COLS) cols = MAX_COLS;
+        if (rows > MAX_ROWS) rows = MAX_ROWS;
+        con_reset();
     }
 
     con_color(120, 255, 160);
@@ -561,7 +669,14 @@ void kmain(BootInfo *bi) {
 #endif
 #endif
 
-    con_color(120, 255, 160);
-    con_puts("\nBIYOS HALT\n");
-    kernel_halt();
+    /* --- Tastatur und Shell --- */
+    acpi_init(bi->rsdp);
+    kbd_init();
+    storage_init();
+    vfs_automount();
+#ifdef BIYOS_DISK_WRITE_TEST
+    disk_write_test();   /* nur mit Test-Images: schreibt auf nvme0p2 und stellt den Inhalt wieder her */
+#endif
+    kapi.task_create("SHELL", shell_main, 0);
+    for (;;) __asm__ volatile("sti\n\thlt");   /* Haupt-Task = Leerlauf */
 }

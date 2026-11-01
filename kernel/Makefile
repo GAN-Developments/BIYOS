@@ -6,6 +6,8 @@
 #
 #   make        -> kernel.elf bauen
 #   make EXTRA=-DBIYOS_TEST_FAULT=1   -> Testfehler ausloesen (1 = #UD, 2 = #DE, 3 = #PF, 4 = #PF nach unmap)
+#   make EXTRA=-DBIYOS_DISK_WRITE_TEST=1   -> Schreibtest auf nvme0p2, stellt den Inhalt wieder her
+#                                      (=2: Muster stehen lassen). NUR mit Test-Images!
 #   make esp    -> kernel.elf nach ../boot/esp/BIYOS/ kopieren (nach 'make esp' im boot-Ordner)
 
 CC      := gcc
@@ -17,9 +19,9 @@ LDFLAGS := -nostdlib -static -no-pie -T linker.ld -z max-page-size=4096 -Wl,--bu
 
 all: kernel.elf
 
-SRCS := kernel.c arch.c mm.c sched.c isr.S
+SRCS := kernel.c arch.c mm.c sched.c acpi.c kbd.c pci.c nvme.c blk.c fat32.c vfs.c shell.c isr.S
 
-kernel.elf: $(SRCS) kernel.h kapi.h cpu.h linker.ld ../boot/bootinfo.h
+kernel.elf: $(SRCS) kernel.h kapi.h cpu.h blk.h fs.h linker.ld ../boot/bootinfo.h
 	$(CC) $(CFLAGS) $(EXTRA) $(LDFLAGS) -o $@ $(SRCS)
 
 esp: kernel.elf

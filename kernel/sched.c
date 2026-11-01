@@ -108,6 +108,14 @@ static uint64_t g_next_id = 1;
 static volatile uint64_t g_ticks;
 static volatile int g_need_resched;
 
+uint32_t lapic_id(void) {
+    return x2apic ? (uint32_t)rdmsr(0x802) : (lapic_read(0x20) >> 24);
+}
+
+void lapic_eoi(void) {
+    lapic_write(LAPIC_EOI, 0);
+}
+
 uint64_t timer_uptime_ms(void) {
     return g_ticks * TICK_MS;
 }
@@ -116,6 +124,7 @@ static void timer_irq(Regs *r) {
     (void)r;
     g_ticks++;
     lapic_write(LAPIC_EOI, 0);
+    kbd_tick();   /* nur im Polling-Modus aktiv */
     g_need_resched = 1;
 }
 
@@ -155,6 +164,34 @@ static Regs *sched_schedule(Regs *r) {
     if (n == cur && cur->state != T_READY) n = &main_task;   /* Leerlauf: Haupt-Task */
     g_cur = n;
     return n->frame;
+}
+
+void sched_request(void) {
+    g_need_resched = 1;
+}
+
+static void pad_puts(const char *s, int w) {
+    int n = 0;
+    for (; s[n]; n++) con_putc(s[n]);
+    for (; n < w; n++) con_putc(' ');
+}
+
+void sched_list(void) {
+    static const char *const names[] = {"?", "BEREIT", "SCHLAEFT", "TOT"};
+    uint64_t f = irq_save();
+    con_puts("  ID  NAME      ZUSTAND   TICKS\n");
+    Task *t = &main_task;
+    do {
+        con_puts("  ");
+        con_dec(t->id);
+        con_puts("   ");
+        pad_puts(t->name, 10);
+        pad_puts(t == g_cur ? "LAEUFT" : names[t->state >= 1 && t->state <= 3 ? t->state : 0], 10);
+        con_dec(t->run_ticks);
+        con_puts("\n");
+        t = t->next;
+    } while (t != &main_task);
+    irq_restore(f);
 }
 
 Regs *sched_after_interrupt(Regs *r) {

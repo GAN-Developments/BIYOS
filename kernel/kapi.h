@@ -15,7 +15,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define KAPI_VERSION 2   /* 2: Tasks, Timer */
+#define KAPI_VERSION 4   /* 2: Tasks, Timer; 3: Tastatur; 4: Dateien */
 
 /* Registerrahmen, wie ihn isr.S beim Interrupt auf dem Stack aufbaut */
 typedef struct {
@@ -69,6 +69,17 @@ typedef struct KernelApi {
     void     (*yield)(void);                                                        /* CPU freiwillig abgeben */
     void     (*sleep_ms)(uint64_t ms);
     uint64_t (*uptime_ms)(void);
+
+    /* --- Eingabe (ab Version 3) --- */
+    int      (*getkey)(void);   /* naechstes Zeichen oder -1, wenn keins da ist */
+
+    /* --- Dateien (ab Version 4): Pfade wie in der Shell, z.B. "E:\\dir\\datei" oder relativ --- */
+    int      (*file_read_all)(const char *path, uint8_t **buf, uint64_t *len);   /* buf per malloc, 0-terminiert */
+    int64_t  (*file_read)(const char *path, uint64_t off, void *buf, uint64_t len);
+    int      (*file_write)(const char *path, const void *buf, uint64_t len, int append);
+    int      (*file_mkdir)(const char *path);
+    int      (*file_remove)(const char *path);
+    int      (*file_rename)(const char *from, const char *to);
 } KernelApi;
 
 extern KernelApi kapi;
