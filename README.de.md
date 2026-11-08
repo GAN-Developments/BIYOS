@@ -2,7 +2,7 @@
 
 [English version](README.md) · MIT-Lizenz · **Alpha / Hobbyprojekt**
 
-BIYOS ist ein kleines x86_64-Betriebssystem, komplett von Grund auf geschrieben: eigener UEFI-Bootloader,
+BIYOS ist ein kleines x86_64-Betriebssystem, das ich **vibe code** mit Claude Sonnet 5.5, komplett von Grund auf geschrieben: eigener UEFI-Bootloader,
 eigener Kernel, eigene Treiber, Dateisysteme und Shell — ohne Bibliotheken und ohne fremden Kernel.
 Die Grundidee:
 
