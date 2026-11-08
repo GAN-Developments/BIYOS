@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * bootinfo.h - Uebergabestruktur zwischen Bootloader und Kernel.
  * Wird von beiden Seiten eingebunden. Alle Felder haben feste Breite.

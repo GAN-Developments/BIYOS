@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * BIYOS UEFI-Bootloader (x86_64)
  *

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # BIYOS UEFI-Bootloader
 #
 # WSL (Ubuntu):  sudo apt install gcc-mingw-w64-x86-64 qemu-system-x86 ovmf make

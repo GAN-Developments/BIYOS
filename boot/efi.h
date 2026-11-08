@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * efi.h - minimale, selbst geschriebene UEFI-Definitionen fuer den BIYOS-Bootloader.
  * Enthaelt nur, was der Bootloader wirklich braucht. Struct-Layouts folgen der
