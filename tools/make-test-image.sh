@@ -1,4 +1,5 @@
 #!/bin/sh
+# SPDX-License-Identifier: MIT
 # Erzeugt ein NVMe-Testabbild fuer QEMU: 128 MiB, GPT,
 #   Partition 1 = FAT32 (mit HALLO.TXT), Partition 2 = Platzhalter mit NTFS-Kennung (zur Erkennung)
 # Benoetigt: sudo apt install gdisk dosfstools mtools
