@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * BIYOS Test-Kernel
  *
@@ -37,6 +38,19 @@ __asm__(
 NOPAT void *memset(void *d, int c, size_t n) {
     uint8_t *p = d;
     while (n--) *p++ = (uint8_t)c;
+    return d;
+}
+
+NOPAT void *memmove(void *d, const void *s, size_t n) {
+    uint8_t *p = d;
+    const uint8_t *q = s;
+    if (p < q) {
+        while (n--) *p++ = *q++;
+    } else {
+        p += n;
+        q += n;
+        while (n--) *--p = *--q;
+    }
     return d;
 }
 
@@ -361,6 +375,12 @@ KernelApi kapi = {
     .file_mkdir = vfs_mkdir,
     .file_remove = vfs_remove,
     .file_rename = vfs_rename,
+    .cmd_register = shell_cmd_register,
+    .cmd_unregister = shell_cmd_unregister,
+    .exec_run = exec_run,
+    .exec_start = exec_start,
+    .module_load = module_load,
+    .module_unload = module_unload,
 };
 
 /* ------------------------------------------------------------------ */
@@ -529,6 +549,275 @@ static void disk_write_test(void) {
 }
 #endif
 
+#ifdef BIYOS_FS_STRESS_TEST
+static size_t slen_(const char *s) {
+    size_t n = 0;
+    while (s[n]) n++;
+    return n;
+}
+
+/* Dateisystem-Stresstest auf einem eingebundenen Laufwerk (Standard C:). Legt \biyostest an, erzeugt
+ * Dateien (resident und nicht resident), haengt an, benennt um, verschiebt, loescht und prueft jeden
+ * Inhalt. NUR AUF TEST-ABBILDERN verwenden: das Laufwerk wird auf Schreiben umgestellt. */
+#ifndef BIYOS_STRESS_DRIVE
+#define BIYOS_STRESS_DRIVE 'C'
+#endif
+#define ST_N 120
+
+static int st_errs;
+static uint8_t st_state[ST_N + 1];   /* 0 = in biyostest, 1 = nach sub verschoben, 2 = geloescht */
+static uint32_t st_size[ST_N + 1];
+
+static void st_err(const char *what, int i, int r) {
+    st_errs++;
+    if (st_errs < 20) {
+        con_puts("  FEHLER ");
+        con_puts(what);
+        con_putc(' ');
+        con_dec((uint64_t)i);
+        con_puts(": ");
+        con_puts(r < 0 ? fs_strerror(r) : "INHALT FALSCH");
+        con_putc('\n');
+    }
+}
+
+static void st_pat(uint8_t *b, uint64_t off, uint64_t n, uint32_t seed) {
+    for (uint64_t j = 0; j < n; j++) b[j] = (uint8_t)((off + j) * 31 + seed);
+}
+
+static void st_name(char *out, const char *dir, const char *pre, int i, const char *suf) {
+    size_t n = 0;
+    out[n++] = (char)BIYOS_STRESS_DRIVE;
+    out[n++] = ':';
+    for (const char *p = "/biyostest/"; *p; p++) out[n++] = *p;
+    for (const char *p = dir; *p; p++) out[n++] = *p;
+    for (const char *p = pre; *p; p++) out[n++] = *p;
+    if (i >= 0) {
+        out[n++] = (char)('0' + i / 100);
+        out[n++] = (char)('0' + (i / 10) % 10);
+        out[n++] = (char)('0' + i % 10);
+    }
+    for (const char *p = suf; *p; p++) out[n++] = *p;
+    out[n] = 0;
+}
+
+static int st_verify(const char *path, uint64_t size, uint32_t seed) {
+    uint8_t *b;
+    uint64_t l;
+    int r = vfs_read_all(path, &b, &l);
+    if (r) return r;
+    int ok = (l == size);
+    for (uint64_t j = 0; ok && j < l; j++)
+        if (b[j] != (uint8_t)(j * 31 + seed)) ok = 0;
+    kapi.free(b);
+    return ok ? 0 : 1;
+}
+
+static int st_write_pat(const char *path, uint64_t off, uint64_t n, uint32_t seed, int append) {
+    uint8_t *b = kapi.malloc(n ? (size_t)n : 1);
+    if (!b) return FS_ENOSPC;
+    st_pat(b, off, n, seed);
+    int r = vfs_write(path, b, n, append);
+    kapi.free(b);
+    return r;
+}
+
+typedef struct { int files, dirs; } StCount;
+static int st_count_cb(const FsEntry *e, void *ctx) {
+    StCount *c = ctx;
+    if (e->is_dir) c->dirs++;
+    else c->files++;
+    return 0;
+}
+
+static void fs_stress_test(void) {
+    char p[160], q[160];
+    int r;
+    con_puts("FS STRESS: START\n");
+    r = vfs_set_rw(BIYOS_STRESS_DRIVE, 1);
+    if (r) { con_puts("FS STRESS: SCHREIBEN NICHT ERLAUBT: "); con_puts(fs_strerror(r)); con_putc('\n'); return; }
+    st_name(p, "", "", -1, "");
+    p[slen_(p) - 1] = 0;   /* "C:/biyostest/" ohne Schluss-/ */
+    r = vfs_mkdir(p);
+    if (r) st_err("MKDIR biyostest", 0, r);
+    st_name(p, "sub", "", -1, "");
+    r = vfs_mkdir(p);
+    if (r) st_err("MKDIR sub", 0, r);
+
+    /* 1. 120 Dateien: jede dritte gross (mehrere Cluster), die anderen klein (resident) */
+    for (int i = 1; i <= ST_N; i++) {
+        st_size[i] = (i % 3 == 0) ? (uint32_t)(20000 + i * 7) : (uint32_t)(100 + i);
+        st_name(p, "", "f", i, ".txt");
+        r = st_write_pat(p, 0, st_size[i], (uint32_t)i, 0);
+        if (r) st_err("CREATE", i, r);
+    }
+    for (int i = 1; i <= ST_N; i++) {
+        st_name(p, "", "f", i, ".txt");
+        r = st_verify(p, st_size[i], (uint32_t)i);
+        if (r) st_err("VERIFY1", i, r);
+    }
+    con_puts("  1. ANLEGEN+PRUEFEN FERTIG\n");
+
+    /* 2. jede fuenfte Datei: 3000 Bytes anhaengen (klein -> gross und gross -> groesser) */
+    for (int i = 5; i <= ST_N; i += 5) {
+        st_name(p, "", "f", i, ".txt");
+        r = st_write_pat(p, st_size[i], 3000, (uint32_t)i, 1);
+        if (r) st_err("APPEND", i, r);
+        st_size[i] += 3000;
+        r = st_verify(p, st_size[i], (uint32_t)i);
+        if (r) st_err("VERIFY2", i, r);
+    }
+    con_puts("  2. ANHAENGEN FERTIG\n");
+
+    /* 3. jede siebte Datei nach sub\ verschieben und umbenennen */
+    for (int i = 7; i <= ST_N; i += 7) {
+        st_name(p, "", "f", i, ".txt");
+        st_name(q, "sub/", "verschoben_", i, ".dat");
+        r = vfs_rename(p, q);
+        if (r) st_err("RENAME", i, r);
+        else st_state[i] = 1;
+    }
+    for (int i = 7; i <= ST_N; i += 7) {
+        if (st_state[i] != 1) continue;
+        st_name(q, "sub/", "verschoben_", i, ".dat");
+        r = st_verify(q, st_size[i], (uint32_t)i);
+        if (r) st_err("VERIFY3", i, r);
+        FsEntry e;
+        st_name(p, "", "f", i, ".txt");
+        if (vfs_stat(p, &e) != FS_ENOENT) st_err("ALTER NAME NOCH DA", i, 0);
+    }
+    con_puts("  3. UMBENENNEN/VERSCHIEBEN FERTIG\n");
+
+    /* 4. jede vierte (noch vorhandene) Datei loeschen */
+    for (int i = 4; i <= ST_N; i += 4) {
+        if (st_state[i] != 0) continue;
+        st_name(p, "", "f", i, ".txt");
+        r = vfs_remove(p);
+        if (r) st_err("DELETE", i, r);
+        else st_state[i] = 2;
+    }
+    for (int i = 1; i <= ST_N; i++) {
+        FsEntry e;
+        st_name(p, "", "f", i, ".txt");
+        int rs = vfs_stat(p, &e);
+        if (st_state[i] == 0) {
+            r = st_verify(p, st_size[i], (uint32_t)i);
+            if (r) st_err("VERIFY4", i, r);
+        } else if (rs != FS_ENOENT) {
+            st_err("SOLLTE FEHLEN", i, 0);
+        }
+    }
+    int exp_root = 0, exp_sub = 0;
+    for (int i = 1; i <= ST_N; i++) {
+        if (st_state[i] == 0) exp_root++;
+        if (st_state[i] == 1) exp_sub++;
+    }
+    StCount c1 = {0, 0}, c2 = {0, 0};
+    st_name(p, "", "", -1, "");
+    p[slen_(p) - 1] = 0;
+    vfs_readdir(p, st_count_cb, &c1);
+    st_name(p, "sub", "", -1, "");
+    vfs_readdir(p, st_count_cb, &c2);
+    if (c1.files != exp_root || c1.dirs != 1) st_err("ANZAHL biyostest", c1.files, 0);
+    if (c2.files != exp_sub) st_err("ANZAHL sub", c2.files, 0);
+    con_puts("  4. LOESCHEN FERTIG: ");
+    con_dec((uint64_t)c1.files);
+    con_puts(" DATEIEN, ");
+    con_dec((uint64_t)c2.files);
+    con_puts(" IN SUB\n");
+
+    /* 5. grosse Datei: 3 MB anlegen, ersetzen (klein), anhaengen, wieder winzig machen */
+    st_name(p, "", "big.bin", -1, "");
+    r = st_write_pat(p, 0, 3 * 1024 * 1024, 77, 0);
+    if (r) st_err("BIG CREATE", 0, r);
+    r = st_verify(p, 3 * 1024 * 1024, 77);
+    if (r) st_err("BIG VERIFY", 0, r);
+    r = st_write_pat(p, 0, 10000, 78, 0);
+    if (r) st_err("BIG SHRINK", 0, r);
+    r = st_verify(p, 10000, 78);
+    if (r) st_err("BIG VERIFY2", 0, r);
+    r = st_write_pat(p, 10000, 5000, 78, 1);
+    if (r) st_err("BIG APPEND", 0, r);
+    r = st_verify(p, 15000, 78);
+    if (r) st_err("BIG VERIFY3", 0, r);
+    r = st_write_pat(p, 0, 500, 79, 0);
+    if (r) st_err("BIG TINY", 0, r);
+    r = st_verify(p, 500, 79);
+    if (r) st_err("BIG VERIFY4", 0, r);
+    con_puts("  5. GROSSE DATEI FERTIG\n");
+
+    /* 6. Verzeichnisse: verschachteln, nicht leer loeschen (muss scheitern), dann aufraeumen */
+    st_name(p, "a", "", -1, "");
+    r = vfs_mkdir(p);
+    if (r) st_err("MKDIR a", 0, r);
+    st_name(p, "a/b", "", -1, "");
+    r = vfs_mkdir(p);
+    if (r) st_err("MKDIR a/b", 0, r);
+    st_name(p, "a/b/", "tief.txt", -1, "");
+    r = st_write_pat(p, 0, 40, 5, 0);
+    if (r) st_err("DEEP CREATE", 0, r);
+    st_name(q, "a", "", -1, "");
+    if (vfs_remove(q) != FS_ENOTEMPTY) st_err("RMDIR NICHT LEER", 0, 0);
+    r = vfs_remove(p);
+    if (r) st_err("DEEP DELETE", 0, r);
+    st_name(p, "a/b", "", -1, "");
+    r = vfs_remove(p);
+    if (r) st_err("RMDIR b", 0, r);
+    st_name(p, "a", "", -1, "");
+    r = vfs_remove(p);
+    if (r) st_err("RMDIR a", 0, r);
+    con_puts("  6. VERZEICHNISSE FERTIG\n");
+
+    /* 7. Namen: gemischte Schreibweise und Leerzeichen, Suche ohne Beachtung der Schreibweise */
+    st_name(p, "", "Gemischter Name mit Leerzeichen.TXT", -1, "");
+    r = st_write_pat(p, 0, 300, 9, 0);
+    if (r) st_err("NAME CREATE", 0, r);
+    st_name(p, "", "gemischter name mit leerzeichen.txt", -1, "");
+    r = st_verify(p, 300, 9);
+    if (r) st_err("NAME LOOKUP", 0, r);
+    con_puts("  7. NAMEN FERTIG\n");
+
+#ifdef BIYOS_STRESS_MANY
+    /* 8. grosses Verzeichnis: mehrstufiger Index-Baum, danach die Haelfte loeschen */
+    st_name(p, "many", "", -1, "");
+    r = vfs_mkdir(p);
+    if (r) st_err("MKDIR many", 0, r);
+    for (int i = 1; i <= BIYOS_STRESS_MANY; i++) {
+        st_name(p, "many/", "m", i, ".txt");
+        r = st_write_pat(p, 0, (uint64_t)(50 + i % 40), (uint32_t)i + 200, 0);
+        if (r) st_err("MANY CREATE", i, r);
+    }
+    for (int i = 1; i <= BIYOS_STRESS_MANY; i++) {
+        st_name(p, "many/", "m", i, ".txt");
+        r = st_verify(p, (uint64_t)(50 + i % 40), (uint32_t)i + 200);
+        if (r) st_err("MANY VERIFY", i, r);
+    }
+    for (int i = 2; i <= BIYOS_STRESS_MANY; i += 2) {
+        st_name(p, "many/", "m", i, ".txt");
+        r = vfs_remove(p);
+        if (r) st_err("MANY DELETE", i, r);
+    }
+    StCount c3 = {0, 0};
+    st_name(p, "many", "", -1, "");
+    vfs_readdir(p, st_count_cb, &c3);
+    if (c3.files != BIYOS_STRESS_MANY / 2) st_err("MANY ANZAHL", c3.files, 0);
+    for (int i = 1; i <= BIYOS_STRESS_MANY; i += 2) {
+        st_name(p, "many/", "m", i, ".txt");
+        r = st_verify(p, (uint64_t)(50 + i % 40), (uint32_t)i + 200);
+        if (r) st_err("MANY VERIFY2", i, r);
+    }
+    con_puts("  8. GROSSES VERZEICHNIS FERTIG: ");
+    con_dec((uint64_t)c3.files);
+    con_puts(" DATEIEN\n");
+#endif
+
+    con_puts(st_errs ? "FS STRESS: FEHLER\n" : "FS STRESS: OK\n");
+    con_puts("  FEHLERZAHL: ");
+    con_dec((uint64_t)st_errs);
+    con_putc('\n');
+}
+#endif
+
 /* ------------------------------------------------------------------ */
 /* Kernel                                                              */
 /* ------------------------------------------------------------------ */
@@ -674,6 +963,10 @@ void kmain(BootInfo *bi) {
     kbd_init();
     storage_init();
     vfs_automount();
+    module_load_boot(bi);   /* Module aus boot.cfg starten (nach den Laufwerken, damit IMPORT Dateien lesen kann) */
+#ifdef BIYOS_FS_STRESS_TEST
+    fs_stress_test();
+#endif
 #ifdef BIYOS_DISK_WRITE_TEST
     disk_write_test();   /* nur mit Test-Images: schreibt auf nvme0p2 und stellt den Inhalt wieder her */
 #endif

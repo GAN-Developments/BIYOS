@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * blk.h - Blockgeraete: ganze Datenträger und Partitionen
  *

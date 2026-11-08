@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * blk.c - Blockgeraete-Register, Partitionserkennung (GPT und MBR), Dateisystem-Erkennung
  */
@@ -79,6 +80,7 @@ static void detect_fs(BlockDev *d) {
     if (d->read(d, 0, 1, s) == 0) {
         if (memeq(s + 3, "NTFS    ", 8)) scopy(d->fs, "NTFS", 8);
         else if (memeq(s + 3, "EXFAT   ", 8)) scopy(d->fs, "EXFAT", 8);
+        else if (memeq(s + 3, "-FVE-FS-", 8)) scopy(d->fs, "BITLCK", 8);   /* BitLocker: verschluesselt */
         else if (memeq(s + 0x52, "FAT32   ", 8)) scopy(d->fs, "FAT32", 8);
         else if (memeq(s + 0x36, "FAT16   ", 8)) scopy(d->fs, "FAT16", 8);
         else if (memeq(s + 0x36, "FAT12   ", 8)) scopy(d->fs, "FAT12", 8);

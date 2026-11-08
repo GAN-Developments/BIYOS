@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # BIYOS Test-Kernel (ELF64)
 #
 # Bauen in WSL (Ubuntu):  sudo apt install gcc make
@@ -19,7 +20,7 @@ LDFLAGS := -nostdlib -static -no-pie -T linker.ld -z max-page-size=4096 -Wl,--bu
 
 all: kernel.elf
 
-SRCS := kernel.c arch.c mm.c sched.c acpi.c kbd.c pci.c nvme.c blk.c fat32.c vfs.c shell.c isr.S
+SRCS := kernel.c arch.c mm.c sched.c acpi.c kbd.c pci.c nvme.c blk.c fat32.c ntfs.c vfs.c exec.c shell.c isr.S
 
 kernel.elf: $(SRCS) kernel.h kapi.h cpu.h blk.h fs.h linker.ld ../boot/bootinfo.h
 	$(CC) $(CFLAGS) $(EXTRA) $(LDFLAGS) -o $@ $(SRCS)

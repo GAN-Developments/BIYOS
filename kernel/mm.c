@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * mm.c - Speicherverwaltung des BIYOS-Kernels
  *

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * sched.c - Timer und Scheduler des BIYOS-Kernels
  *

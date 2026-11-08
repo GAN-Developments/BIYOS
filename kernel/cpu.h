@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * cpu.h - kleine CPU-Helfer als Inline-Funktionen (Port-I/O, MSRs, Interrupt-Flag)
  */

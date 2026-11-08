@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 # isr.S - Einsprungpunkte fuer alle 256 Interrupt-Vektoren
 #
 # Jeder Stub legt (falls die CPU keinen Fehlercode liefert) eine 0 als Fehlercode und danach

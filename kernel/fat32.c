@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * fat32.c - FAT32-Dateisystem (Lesen und Schreiben, lange Dateinamen, Unterverzeichnisse)
  *

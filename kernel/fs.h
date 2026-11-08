@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * fs.h - Dateisystem-Schnittstelle von BIYOS
  *
@@ -26,6 +27,7 @@
 #define FS_EROFS    -11   /* schreibgeschuetzt eingebunden */
 #define FS_ENODRV   -12   /* Laufwerk nicht eingebunden */
 #define FS_ENOSYS   -13
+#define FS_EDIRTY   -14   /* Volume nicht sauber (Journal/Dirty-Flag/Ruhezustand): erst in Windows reparieren */
 
 typedef struct {
     char name[256];
@@ -50,6 +52,7 @@ typedef struct Fs {
     int     (*remove)(struct Fs *fs, const char *path);   /* Datei oder leeres Verzeichnis */
     int     (*rename)(struct Fs *fs, const char *from, const char *to);
     int     (*statfs)(struct Fs *fs, uint64_t *total_bytes, uint64_t *free_bytes);
+    int     (*enable_write)(struct Fs *fs);   /* optional: prueft, ob Schreiben sicher ist (NTFS) */
 } Fs;
 
 const char *fs_strerror(int err);

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * arch.c - CPU-Einrichtung des BIYOS-Kernels (x86_64)
  *

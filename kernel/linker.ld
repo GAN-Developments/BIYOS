@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /* BIYOS Test-Kernel: physisch = virtuell, ab 1 MiB.
  * Bei OVMF ist 0x100000-0x800000 freier Speicher (16 MiB lag dort in BootServicesData).
  * Jede Sektion beginnt auf einer eigenen 4-KiB-Seite, damit der Bootloader die

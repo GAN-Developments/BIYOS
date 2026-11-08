@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * acpi.c - minimaler ACPI-Teil: MADT lesen und ISA-Interrupts ueber den IOAPIC routen
  *

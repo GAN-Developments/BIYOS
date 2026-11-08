@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * pci.c - PCI-Enumeration ueber den klassischen Konfigurationsraum (Ports 0xCF8/0xCFC)
  *

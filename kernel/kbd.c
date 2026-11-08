@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * kbd.c - PS/2-Tastaturtreiber (i8042-Controller, Scancode-Satz 1 ueber die Uebersetzung)
  *

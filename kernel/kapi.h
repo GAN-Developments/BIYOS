@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * kapi.h - die Kernel-Funktionstabelle von BIYOS
  *
@@ -15,7 +16,7 @@
 #include <stdint.h>
 #include <stddef.h>
 
-#define KAPI_VERSION 4   /* 2: Tasks, Timer; 3: Tastatur; 4: Dateien */
+#define KAPI_VERSION 5   /* 2: Tasks, Timer; 3: Tastatur; 4: Dateien; 5: Befehle, Programme, Module */
 
 /* Registerrahmen, wie ihn isr.S beim Interrupt auf dem Stack aufbaut */
 typedef struct {
@@ -80,6 +81,21 @@ typedef struct KernelApi {
     int      (*file_mkdir)(const char *path);
     int      (*file_remove)(const char *path);
     int      (*file_rename)(const char *from, const char *to);
+
+    /* --- Shell-Befehle, Programme und Module (ab Version 5) ---
+     * cmd_register: fn(argc, argv) laeuft in der Shell-Task, argv[0] ist der Befehlsname. Ein angemeldeter
+     *   Befehl hat Vorrang vor eingebauten (Befehle lassen sich also ersetzen). Wird das Modul, in dem fn
+     *   liegt, entladen, verschwindet der Befehl von selbst.
+     * exec_run:   Programm (PLSE/STRT) in der aufrufenden Task ausfuehren und warten; *ret (darf NULL sein)
+     *   bekommt den Rueckgabewert. Rueckgabe 0 = gestartet, sonst Fehlercode.
+     * exec_start: Programm in eigener Task starten, Rueckgabe Task-ID oder Fehlercode < 0.
+     * module_load / module_unload: wie "module load" bzw. "module remove" in der Shell (DRIV). */
+    int      (*cmd_register)(const char *name, int (*fn)(int argc, char **argv));
+    int      (*cmd_unregister)(const char *name);
+    int      (*exec_run)(const char *path, int argc, char **argv, int *ret);
+    int64_t  (*exec_start)(const char *path, int argc, char **argv);
+    int      (*module_load)(const char *path);
+    int      (*module_unload)(const char *name_or_number);
 } KernelApi;
 
 extern KernelApi kapi;

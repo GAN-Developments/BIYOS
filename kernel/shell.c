@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * shell.c - eingebaute Notfall-Shell von BIYOS
  *
@@ -88,11 +89,13 @@ static void cmd_help(void) {
     con_puts("  MEM                     SPEICHER (PMM)\n");
     con_puts("  UPTIME                  LAUFZEIT\n");
     con_puts("  TASKS                   TASKLISTE\n");
-    con_puts("  MODULE LIST             GELADENE MODULE (VOM BOOTLOADER)\n");
+    con_puts("  MODULE LIST|LOAD <DATEI.DRV>|REMOVE <NAME|NR>   KERNEL-MODULE (DRIV)\n");
+    con_puts("  RUN <DATEI> [ARG..]     PROGRAMM (PLSE/STRT) AUSFUEHREN UND WARTEN\n");
+    con_puts("  START <DATEI> [ARG..]   PROGRAMM ALS EIGENE TASK STARTEN\n");
     con_puts("  LAYOUT DE|US            TASTATURLAYOUT\n");
     con_puts("  PEEK <ADR> [LAENGE]     SPEICHER ANZEIGEN (HEX)\n");
     con_puts("  POKE <ADR> <WERT> [1|2|4|8]   SPEICHER SCHREIBEN (HEX)\n");
-    con_puts("  MOUNT [<DEV> <X> [RW]]  LAUFWERKE (NUR LESEN, ES SEI DENN RW)\n");
+    con_puts("  MOUNT [<DEV> <X> [RW]]  LAUFWERKE (NUR LESEN, ES SEI DENN RW; NTFS-RW NUR BEI SAUBEREM VOLUME)\n");
     con_puts("  E:                      LAUFWERK WECHSELN\n");
     con_puts("  DIR|LS [PFAD]  CD|PWD [PFAD]  TYPE|CAT <DATEI>  DF\n");
     con_puts("  MKDIR <PFAD>  DEL|RM <PFAD>  REN|MV <VON> <NACH>  COPY|CP <VON> <NACH>\n");
@@ -162,28 +165,7 @@ static void cmd_poke(int argc, char **argv) {
     con_puts("OK\n");
 }
 
-static void cmd_module(int argc, char **argv) {
-    if (argc < 2 || !streq_ci(argv[1], "list")) {
-        con_puts("MODULE LIST\n");
-        return;
-    }
-    const BootModule *m = (const BootModule *)(uintptr_t)g_bi->modules;
-    con_puts("MODULE: ");
-    con_dec(g_bi->module_count);
-    con_puts("\n");
-    for (uint64_t i = 0; i < g_bi->module_count; i++) {
-        const uint8_t *h = (const uint8_t *)(uintptr_t)m[i].addr;
-        con_puts("  ");
-        con_puts(m[i].name);
-        con_puts("  ");
-        for (int k = 4; k < 8; k++) con_putc((char)h[k]);
-        con_puts("  ");
-        con_dec(m[i].size);
-        con_puts(" BYTES AT ");
-        con_hex(m[i].addr);
-        con_puts("\n");
-    }
-}
+static void cmd_module(int argc, char **argv);   /* weiter unten: braucht err() */
 
 static void cmd_pci(void) {
     for (int i = 0; i < pci_count(); i++) {
@@ -274,12 +256,117 @@ static void cmd_diskread(int argc, char **argv) {
 /* ------------------------------------------------------------------ */
 static void err(int r) {
     con_puts("FEHLER: ");
-    con_puts(fs_strerror(r));
+    con_puts(exec_strerror(r));
     con_putc('\n');
 }
 
 static void print_path_bs(const char *p) {
     for (; *p; p++) con_putc(*p == '/' ? '\\' : *p);
+}
+
+/* ------------------------------------------------------------------ */
+/* Programme und Module                                                */
+/* ------------------------------------------------------------------ */
+static void print_signed(int v) {
+    if (v < 0) {
+        con_putc('-');
+        con_dec((uint64_t)(-(int64_t)v));
+    } else {
+        con_dec((uint64_t)v);
+    }
+}
+
+/* RUN: in dieser Task ausfuehren und warten; START: eigene Task (Hintergrund) */
+static void cmd_run(int argc, char **argv, int background) {
+    if (argc < 2) {
+        con_puts(background ? "START <DATEI> [ARGUMENTE]\n" : "RUN <DATEI> [ARGUMENTE]\n");
+        return;
+    }
+    if (background) {
+        int64_t r = exec_start(argv[1], argc - 1, argv + 1);
+        if (r < 0) {
+            err((int)r);
+            return;
+        }
+        con_puts("TASK ");
+        con_dec((uint64_t)r);
+        con_puts(" GESTARTET\n");
+    } else {
+        int ret = 0;
+        int r = exec_run(argv[1], argc - 1, argv + 1, &ret);
+        if (r) {
+            err(r);
+            return;
+        }
+        if (ret) {
+            con_puts("RUECKGABEWERT ");
+            print_signed(ret);
+            con_putc('\n');
+        }
+    }
+}
+
+static void cmd_module(int argc, char **argv) {
+    if (argc >= 2 && streq_ci(argv[1], "list")) {
+        con_puts("MODULE:\n");
+        module_list();
+    } else if (argc >= 3 && streq_ci(argv[1], "load")) {
+        int r = module_load(argv[2]);
+        if (r) err(r);
+        else con_puts("OK\n");
+    } else if (argc >= 3 && (streq_ci(argv[1], "remove") || streq_ci(argv[1], "unload"))) {
+        int r = module_unload(argv[2]);
+        if (r) err(r);
+        else con_puts("OK\n");
+    } else {
+        con_puts("MODULE LIST | MODULE LOAD <DATEI.DRV> | MODULE REMOVE <NAME|NR>\n");
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Befehle, die Module anmelden (kapi.cmd_register)                    */
+/* ------------------------------------------------------------------ */
+#define MAX_CMDS 32
+#define CMD_NAME 16
+
+static struct {
+    char name[CMD_NAME];
+    int (*fn)(int argc, char **argv);
+} g_cmds[MAX_CMDS];
+
+int shell_cmd_register(const char *name, int (*fn)(int argc, char **argv)) {
+    if (!name || !name[0] || !fn) return FS_EINVAL;
+    size_t n = strlen_(name);
+    if (n >= CMD_NAME) return FS_ENAME;
+    int slot = -1;
+    for (int i = 0; i < MAX_CMDS; i++) {
+        if (g_cmds[i].fn && streq_ci(g_cmds[i].name, name)) {   /* gleicher Name: ersetzen */
+            slot = i;
+            break;
+        }
+        if (!g_cmds[i].fn && slot < 0) slot = i;
+    }
+    if (slot < 0) return FS_ENOSPC;
+    for (size_t k = 0; k <= n; k++) g_cmds[slot].name[k] = name[k];
+    g_cmds[slot].fn = fn;
+    return 0;
+}
+
+int shell_cmd_unregister(const char *name) {
+    for (int i = 0; i < MAX_CMDS; i++) {
+        if (g_cmds[i].fn && streq_ci(g_cmds[i].name, name)) {
+            g_cmds[i].fn = 0;
+            return 0;
+        }
+    }
+    return FS_ENOENT;
+}
+
+void shell_cmds_remove_range(uint64_t lo, uint64_t hi) {
+    for (int i = 0; i < MAX_CMDS; i++) {
+        uint64_t a = (uint64_t)(uintptr_t)g_cmds[i].fn;
+        if (a && a >= lo && a < hi) g_cmds[i].fn = 0;
+    }
 }
 
 typedef struct {
@@ -577,6 +664,12 @@ static void run_line(char *line) {
         if (r) err(r);
         return;
     }
+    for (int i = 0; i < MAX_CMDS; i++) {   /* von Modulen angemeldete Befehle haben Vorrang */
+        if (g_cmds[i].fn && streq_ci(g_cmds[i].name, c)) {
+            g_cmds[i].fn(argc, argv);
+            return;
+        }
+    }
     if (streq_ci(c, "help") || streq_ci(c, "?")) cmd_help();
     else if (streq_ci(c, "clear") || streq_ci(c, "cls")) con_reset();
     else if (streq_ci(c, "echo")) cmd_echo(argc, argv, quoted);
@@ -588,6 +681,8 @@ static void run_line(char *line) {
     else if (streq_ci(c, "uptime")) cmd_uptime();
     else if (streq_ci(c, "tasks")) sched_list();
     else if (streq_ci(c, "module")) cmd_module(argc, argv);
+    else if (streq_ci(c, "run")) cmd_run(argc, argv, 0);
+    else if (streq_ci(c, "start")) cmd_run(argc, argv, 1);
     else if (streq_ci(c, "layout")) {
         if (argc > 1 && streq_ci(argv[1], "de")) kbd_set_layout(1);
         else if (argc > 1 && streq_ci(argv[1], "us")) kbd_set_layout(0);
@@ -620,6 +715,14 @@ static void run_line(char *line) {
     else if (streq_ci(c, "reboot")) do_reboot();
     else if (streq_ci(c, "shutdown")) do_shutdown();
     else {
+        FsEntry fe;   /* kein Befehl: ist es eine Datei? Dann als Programm ausfuehren (wie bei DOS) */
+        if (vfs_stat(c, &fe) == 0 && !fe.is_dir) {
+            char *av[ARG_MAX + 1];   /* "run" + die getippte Zeile (Dateiname und Argumente) */
+            av[0] = (char *)"run";
+            for (int i = 0; i < argc; i++) av[i + 1] = argv[i];
+            cmd_run(argc + 1, av, 0);
+            return;
+        }
         con_puts("UNBEKANNTER BEFEHL: ");
         con_puts(c);
         con_puts("  (HELP)\n");

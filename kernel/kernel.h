@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * kernel.h - gemeinsame Deklarationen des BIYOS-Kernels
  */
@@ -100,6 +101,7 @@ void       storage_init(void);   /* PCI scannen, Laufwerke und Partitionen einri
 
 /* ---------- Dateisysteme (fat32.c, vfs.c) ---------- */
 int   fat32_mount(BlockDev *bd, Fs **out);          /* schreibgeschuetzt eingebunden zurueckgegeben */
+int   ntfs_mount(BlockDev *bd, Fs **out);           /* dito (NTFS bisher nur lesen) */
 int   vfs_mount(char letter, Fs *fs);
 int   vfs_unmount(char letter);
 Fs   *vfs_get(char letter);
@@ -120,7 +122,28 @@ int   vfs_remove(const char *path);
 int   vfs_rename(const char *from, const char *to);
 int   vfs_statfs(char letter, uint64_t *total, uint64_t *free_bytes);
 
+/* ---------- Executables und Module (exec.c) ---------- */
+#define EX_EHEADER -20   /* kein gueltiger BIYOS-Header */
+#define EX_ETYPE   -21   /* falscher Typ (DRIV/STRT/PLSE) fuer diesen Befehl */
+#define EX_EIMPORT -22   /* IMPORT-Abschnitt ungueltig oder Quelle nicht lesbar */
+#define EX_ENOCODE -23   /* nach dem Header kommt kein Code */
+#define EX_EINIT   -24   /* Modul meldet beim Start einen Fehler */
+#define EX_EBUSY   -25   /* Modul lehnt das Entladen ab */
+#define EX_ELIMIT  -26   /* Modultabelle voll */
+#define EX_ENOMOD  -27   /* Modul nicht geladen */
+
+const char *exec_strerror(int err);                                       /* auch fuer FS_E*-Codes */
+int     exec_run(const char *path, int argc, char **argv, int *ret);      /* in der aufrufenden Task, wartet */
+int64_t exec_start(const char *path, int argc, char **argv);              /* eigene Task: ID oder Fehler < 0 */
+int     module_load(const char *path);
+int     module_unload(const char *name_or_number);
+void    module_list(void);
+void    module_load_boot(const BootInfo *bi);
+
 /* ---------- Shell (shell.c) ---------- */
 void shell_main(void *arg);
+int  shell_cmd_register(const char *name, int (*fn)(int argc, char **argv));
+int  shell_cmd_unregister(const char *name);
+void shell_cmds_remove_range(uint64_t lo, uint64_t hi);   /* alle Befehle, deren Code in [lo, hi) liegt */
 
 #endif /* BIYOS_KERNEL_H */

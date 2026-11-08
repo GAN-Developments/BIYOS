@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: MIT */
 /*
  * vfs.c - virtuelle Dateisystem-Schicht: Laufwerksbuchstaben, aktuelles Verzeichnis, Pfade
  *
@@ -33,6 +34,7 @@ const char *fs_strerror(int err) {
     case FS_EROFS: return "SCHREIBGESCHUETZT (MOUNT <GERAET> <LAUFWERK> RW)";
     case FS_ENODRV: return "LAUFWERK NICHT EINGEBUNDEN";
     case FS_ENOSYS: return "NICHT UNTERSTUETZT";
+    case FS_EDIRTY: return "VOLUME NICHT SAUBER (WINDOWS: SCHNELLSTART AUS, CHKDSK)";
     default: return "FEHLER";
     }
 }
@@ -185,6 +187,7 @@ int vfs_write(const char *path, const void *buf, uint64_t len, int append) {
     char norm[512];
     int r = vres(path, &fs, norm, 0);
     if (r) return r;
+    if (!fs->write) return FS_ENOSYS;
     if (fs->readonly) return FS_EROFS;
     return fs->write(fs, norm, buf, len, append);
 }
@@ -194,6 +197,7 @@ int vfs_mkdir(const char *path) {
     char norm[512];
     int r = vres(path, &fs, norm, 0);
     if (r) return r;
+    if (!fs->mkdir) return FS_ENOSYS;
     if (fs->readonly) return FS_EROFS;
     return fs->mkdir(fs, norm);
 }
@@ -203,6 +207,7 @@ int vfs_remove(const char *path) {
     char norm[512];
     int r = vres(path, &fs, norm, 0);
     if (r) return r;
+    if (!fs->remove) return FS_ENOSYS;
     if (fs->readonly) return FS_EROFS;
     return fs->remove(fs, norm);
 }
@@ -215,6 +220,7 @@ int vfs_rename(const char *from, const char *to) {
     r = vres(to, &fs2, n2, 0);
     if (r) return r;
     if (fs1 != fs2) return FS_EINVAL;   /* ueber Laufwerke hinweg: copy + del */
+    if (!fs1->rename) return FS_ENOSYS;
     if (fs1->readonly) return FS_EROFS;
     return fs1->rename(fs1, n1, n2);
 }
@@ -239,8 +245,14 @@ int vfs_mount_dev(const char *devname, char letter, int rw) {
     Fs *fs = 0;
     int r;
     if (streq(d->fs, "FAT32")) r = fat32_mount(d, &fs);
+    else if (streq(d->fs, "NTFS")) r = ntfs_mount(d, &fs);
     else return FS_ENOSYS;
     if (r) return r;
+    if (rw && !fs->write) return FS_ENOSYS;
+    if (rw && fs->enable_write) {
+        int e = fs->enable_write(fs);
+        if (e) return e;
+    }
     fs->readonly = rw ? 0 : 1;
     r = vfs_mount(letter, fs);
     return r;
@@ -249,18 +261,31 @@ int vfs_mount_dev(const char *devname, char letter, int rw) {
 int vfs_set_rw(char letter, int rw) {
     Fs *fs = vfs_get(letter);
     if (!fs) return FS_ENODRV;
+    if (rw && !fs->write) return FS_ENOSYS;
+    if (rw && fs->enable_write) {
+        int e = fs->enable_write(fs);
+        if (e) return e;
+    }
     fs->readonly = rw ? 0 : 1;
     return 0;
 }
 
-/* alle erkannten FAT32-Partitionen einbinden, schreibgeschuetzt, ab Laufwerk E: */
+/* alle erkannten FAT32- und NTFS-Partitionen schreibgeschuetzt einbinden:
+ * die erste NTFS-Partition als C:, alle anderen ab E: */
 void vfs_automount(void) {
-    char letter = 'E';
+    char next = 'E';
     for (int i = 0; i < blk_count(); i++) {
         BlockDev *d = blk_get(i);
-        if (!d->parent || !streq(d->fs, "FAT32")) continue;
-        while (letter <= 'Z' && mounts[letter - 'A']) letter++;
-        if (letter > 'Z') break;
+        int ntfs = streq(d->fs, "NTFS");
+        if (!d->parent || (!ntfs && !streq(d->fs, "FAT32"))) continue;
+        char letter;
+        if (ntfs && !mounts['C' - 'A']) {
+            letter = 'C';
+        } else {
+            while (next <= 'Z' && mounts[next - 'A']) next++;
+            if (next > 'Z') break;
+            letter = next;
+        }
         int r = vfs_mount_dev(d->name, letter, 0);
         con_puts("MOUNT: ");
         con_putc(letter);
@@ -270,10 +295,12 @@ void vfs_automount(void) {
             con_puts(" FEHLGESCHLAGEN: ");
             con_puts(fs_strerror(r));
         } else {
-            con_puts(" (FAT32, ");
+            con_puts(" (");
+            con_puts(vfs_get(letter)->type);
+            con_puts(", ");
             con_puts(vfs_get(letter)->label);
             con_puts(", NUR LESEN)");
-            letter++;
+            if (letter == next) next++;
         }
         con_putc('\n');
     }
