@@ -2,7 +2,7 @@
 
 [English version](README.md) · MIT-Lizenz · **Alpha / Hobbyprojekt**
 
-BIYOS ist ein kleines x86_64-Betriebssystem, das ich **vibe code** mit Claude Sonnet 5.5, komplett von Grund auf geschrieben: eigener UEFI-Bootloader,
+BIYOS ist ein kleines x86_64-Betriebssystem, komplett von Grund auf geschrieben: eigener UEFI-Bootloader,
 eigener Kernel, eigene Treiber, Dateisysteme und Shell — ohne Bibliotheken und ohne fremden Kernel.
 Die Grundidee:
 
@@ -20,10 +20,12 @@ Funktioniert (in QEMU + OVMF getestet, **nicht** auf echter Hardware): UEFI-Boot
 Exception-Ausgabe, Speicherverwaltung, Funktionstabelle `kapi`, ACPI/IOAPIC, APIC-Timer, präemptiver Scheduler,
 PS/2-Tastatur (DE/US), scrollende Konsole, PCI, NVMe, GPT/MBR, **FAT32 (lesen/schreiben, lange Namen)**,
 **NTFS (lesen, dazu experimentelles Schreiben: Anlegen/Ändern/Anhängen/Löschen/Umbenennen, Verzeichnisse, Hardlinks, benannte Streams)**, VFS mit
-Laufwerksbuchstaben, **Executable-Loader (`run`/`start`) mit `DRIV`/`STRT`/`PLSE`, Kernel-Module (`module load/remove`) und `IMPORT`-Section** und eine Notfall-Shell (`peek`/`poke`, `hexwrite`, Dateibefehle).
+Laufwerksbuchstaben, **Executable-Loader (`run`/`start`) mit `DRIV`/`STRT`/`PLSE`**, Kernel-Module (`module load/remove`), `IMPORT`-Section,
+`C:\Start` für `STRT`-Programme, eine **austauschbare Shell**, ein **Text-/Hex-Editor (`edit`)**, `kapi` bis Version 9 für Treiber (PCI, IRQ,
+Blockgeräte, Tastatur) und eine **USB-Tastatur samt USB-2-Hubs** (xHCI + HID, Modul `usbhid.drv`) und **SATA-Platten** (AHCI, Modul `ahci.drv`), beides bisher nur in QEMU getestet sowie eine Notfall-Shell
+(`peek`/`poke`, `hexwrite`, Dateibefehle).
 
-Geplant: Installer (Deutsch/Englisch), zweisprachige Texte, ISO,
-`C:\Start`, `edit` (wie nano, mit `-hex`), AHCI/SATA, USB, ACPI-Ausschalten.
+**Deutsch und Englisch** als Oberfläche (`lang=de|en` und `layout=de|us` in der `boot.cfg`, zur Laufzeit `LANG EN`/`LAYOUT US`, mit `SAVE` dauerhaft). **Installer** (Befehl `install` oder automatisch von der bootbaren **ISO**, `tools/make-iso.sh`): legt eine GPT mit EFI-Partition (FAT32) und einer **zweiten Partition mit NTFS** an und kopiert BIYOS darauf; `mkfs ntfs|fat32` formatiert einzelne Partitionen. Bisher nur in QEMU getestet. Geplant: USB-Mäuse/-Speicher, ACPI-Ausschalten.
 
 ## Sicherheit — bitte lesen
 
