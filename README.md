@@ -3,7 +3,7 @@
 [Deutsche Version](README.de.md) · MIT licensed · **alpha / hobby project**
 
 BIYOS is a small x86_64 operating system written from scratch: its own UEFI bootloader, its own
-kernel, its own drivers, filesystems and shell — no libraries, no borrowed kernel. It is built around
+kernel, its own drivers, filesystems and shell — no libraries, no borrowed kernel.I am vibe coding it with Claude Sonnet 5.5. It is built around
 one unusual idea:
 
 > **Programs get as much control over the machine as possible.** Everything runs in ring 0 in a single
